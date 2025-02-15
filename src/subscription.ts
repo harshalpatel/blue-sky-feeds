@@ -4,27 +4,29 @@ import {
 } from './lexicon/types/com/atproto/sync/subscribeRepos'
 import { FirehoseSubscriptionBase, getOpsByType } from './util/subscription'
 
+const stevenFulop = 'did:plc:cwof5oencu34qrxbbpbdaur6'
+
 export class FirehoseSubscription extends FirehoseSubscriptionBase {
+
+  isCampaignMember(recordAuthor: string): boolean {
+    return [stevenFulop].includes(recordAuthor);
+  }
+
+  hasTerm(recordText: string): boolean {
+    return recordText.toLowerCase().includes('fulop')
+  }
+
   async handleEvent(evt: RepoEvent) {
     if (!isCommit(evt)) return
 
     const ops = await getOpsByType(evt)
 
-    // This logs the text of every post off the firehose.
-    // Just for fun :)
-    // Delete before actually using
-    for (const post of ops.posts.creates) {
-      console.log(post.record.text)
-    }
-
     const postsToDelete = ops.posts.deletes.map((del) => del.uri)
     const postsToCreate = ops.posts.creates
       .filter((create) => {
-        // only alf-related posts
-        return create.record.text.toLowerCase().includes('alf')
+        return this.isCampaignMember(create.author) || this.hasTerm(create.record.text)
       })
       .map((create) => {
-        // map alf-related posts to a db row
         return {
           uri: create.uri,
           cid: create.cid,
@@ -39,6 +41,7 @@ export class FirehoseSubscription extends FirehoseSubscriptionBase {
         .execute()
     }
     if (postsToCreate.length > 0) {
+      console.log(postsToCreate[0])
       await this.db
         .insertInto('post')
         .values(postsToCreate)
